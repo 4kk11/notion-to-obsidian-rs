@@ -2,3 +2,5 @@
 *.log
 .DS_Store
 target
+.clinerules
+.clineignore
