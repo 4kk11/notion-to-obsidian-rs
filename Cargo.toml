@@ -1,0 +1,18 @@
+[package]
+name = "notion-to-obsidian-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+notion-client = { path = "lib/notion-client" }
+tokio = { version = "1.10.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+dotenv = "0.15"
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+regex = "1.5"
+env_logger = "0.11.7"
+log = "0.4.26"
