@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use notion_to_obsidian_rs::{NotionToObsidian, NotionToObsidianError, Result};
+use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, traits::{post_processor::MyPostProcessor, MyFrontmatterGenerator}, NotionToObsidian, NotionToObsidianError, Result};
 use std::fs;
 use std::time::Instant;
 use tokio;
@@ -27,13 +27,24 @@ async fn test_page_conversion() -> Result<()> {
     let notion_token = std::env::var("NOTION_TOKEN")
         .expect("NOTION_TOKEN must be set");
 
+    let tag_database_id = std::env::var("TAG_DATABASE_ID")
+        .expect("TAG_DATABASE_IDが設定されていません");
+
     // Obsidianの出力ディレクトリを一時ディレクトリとして設定
     let start_setup = Instant::now();
     let obsidian_dir = PathBuf::from(TEST_OUTPUT_DIR);
     std::fs::create_dir_all(&obsidian_dir).expect("Failed to create test output directory");
 
+    let converter = NotionToObsidianBuilder::new(notion_token.clone())
+        .with_output_path(TEST_OUTPUT_DIR.to_string())
+        .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, notion_token.clone()).await))
+        .with_post_processor(Box::new(MyPostProcessor{}))
+        .build()
+        .expect("Failed to build NotionToObsidian instance");
+
+
     // NotionToObsidianインスタンスを作成
-    let converter = NotionToObsidian::new(notion_token, obsidian_dir)?;
+    // let converter = NotionToObsidian::new(notion_token, obsidian_dir)?;
     info!("セットアップ完了: {:?}", start_setup.elapsed());
 
     // テスト対象のページを変換

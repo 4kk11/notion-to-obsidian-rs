@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use log::info;
 use notion_client::{
@@ -7,7 +6,6 @@ use notion_client::{
             CheckBoxCondition, Filter, FilterType, PropertyCondition, QueryDatabaseRequest, Sort,
             SortDirection,
         },
-        pages::update::request::UpdatePagePropertiesRequest,
         Client,
     },
     objects::{
@@ -18,12 +16,11 @@ use notion_client::{
 };
 use regex::Regex;
 use std::{
-    collections::{BTreeMap, HashMap},
     fs,
     path::PathBuf,
 };
 
-use crate::error::{NotionToObsidianError, Result};
+use crate::{error::{NotionToObsidianError, Result}, traits::{post_processor::PostProcessor, FrontmatterGenerator}};
 
 #[derive(Debug)]
 struct BlockWithChildren {
@@ -33,47 +30,28 @@ struct BlockWithChildren {
 
 pub struct NotionToObsidian {
     client: Client,
-    tag_mapping: HashMap<String, String>,
     obsidian_dir: PathBuf,
+    frontmatter_generator: Box<dyn FrontmatterGenerator>,
+    post_processor: Box<dyn PostProcessor>,
 }
 
 impl NotionToObsidian {
-    pub fn new(token: String, obsidian_dir: PathBuf) -> Result<Self> {
+    pub fn new(
+        token: String, 
+        obsidian_dir: PathBuf, 
+        frontmatter_generator: Box<dyn FrontmatterGenerator>,
+        post_processor: Box<dyn PostProcessor>,
+
+    ) -> Result<Self> {
         let client = Client::new(token, None)
             .map_err(|e| NotionToObsidianError::ConversionError(e.to_string()))?;
 
         Ok(Self {
             client,
-            tag_mapping: HashMap::new(),
             obsidian_dir,
+            frontmatter_generator,
+            post_processor,
         })
-    }
-
-    pub async fn load_tags(&mut self, tag_database_id: &str) -> Result<()> {
-        let mut request = QueryDatabaseRequest::default();
-        request.sorts = Some(vec![Sort::Property {
-            property: "名前".to_string(),
-            direction: SortDirection::Ascending,
-        }]);
-
-        let response = self
-            .client
-            .databases
-            .query_a_database(tag_database_id, request)
-            .await
-            .map_err(|e| NotionToObsidianError::ConversionError(e.to_string()))?;
-
-        for page in response.results {
-            if let Some(PageProperty::Title { title, .. }) = page.properties.get("名前") {
-                if !title.is_empty() {
-                    if let Some(tag_name) = title[0].plain_text() {
-                        self.tag_mapping.insert(page.id.to_string(), tag_name);
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 
     fn get_block_children_recursively<'a>(
@@ -124,7 +102,7 @@ impl NotionToObsidian {
             .await
             .map_err(|e| NotionToObsidianError::PageRetrievalError(e.to_string()))?;
 
-        let frontmatter = self.generate_frontmatter(&page);
+        let frontmatter = self.generate_frontmatter(&page, &self.client);
         
         // ページの全ブロックを一括で取得
         let blocks = self.get_block_children_recursively(page_id).await?;
@@ -133,28 +111,11 @@ impl NotionToObsidian {
         Ok(format!("{}{}", frontmatter, content))
     }
 
-    fn generate_frontmatter(&self, page: &Page) -> String {
-        let mut frontmatter = String::from("---\n");
-
-        // タイプ（タグ）の処理
-        frontmatter.push_str("types:\n");
-        if let Some(types) = self.extract_types(page) {
-            for type_name in types {
-                frontmatter.push_str(&format!("  - \"[[{}]]\"\n", type_name));
-            }
-        }
-
-        // URLの処理
-        if let Some(url) = self.extract_url(page) {
-            frontmatter.push_str(&format!("URL: {}\n", url));
-        }
-
-        // 作成日時の処理
-        let formatted_time = self.format_datetime(page.created_time);
-        frontmatter.push_str(&format!("created: {}\n", formatted_time));
-
-        frontmatter.push_str("---\n");
-        frontmatter
+    fn generate_frontmatter(&self, page: &Page, client: &Client) -> String {
+        self.frontmatter_generator.generate(page, client).unwrap_or_else(|e| {
+            info!("Frontmatterの生成に失敗: {}", e);
+            String::new()
+        })
     }
 
     fn convert_blocks_to_markdown(&self, blocks: &[BlockWithChildren]) -> Result<String> {
@@ -309,7 +270,6 @@ impl NotionToObsidian {
                 if !children.is_empty() {
                     let child_content = self.convert_blocks_to_markdown(children)?;
                     let formatted_content = child_content
-                        .replace("\n\n", "\n")
                         .lines()
                         .filter(|line| !line.contains(&text))
                         .map(|line| format!(">{}", line))
@@ -460,29 +420,6 @@ impl NotionToObsidian {
         }
     }
 
-    fn extract_types(&self, page: &Page) -> Option<Vec<String>> {
-        for (_, prop) in &page.properties {
-            if let PageProperty::Relation { relation, .. } = prop {
-                return Some(
-                    relation
-                        .iter()
-                        .filter_map(|r| self.tag_mapping.get(&r.id).cloned())
-                        .collect(),
-                );
-            }
-        }
-        None
-    }
-
-    fn extract_url(&self, page: &Page) -> Option<String> {
-        for (_, prop) in &page.properties {
-            if let PageProperty::Url { url, .. } = prop {
-                return url.clone();
-            }
-        }
-        None
-    }
-
     pub fn extract_page_title(&self, page: &Page) -> Option<String> {
         for (_, property) in &page.properties {
             if let PageProperty::Title { title, .. } = property {
@@ -493,12 +430,6 @@ impl NotionToObsidian {
             }
         }
         None
-    }
-
-    fn format_datetime(&self, dt: DateTime<Utc>) -> String {
-        dt.with_timezone(&chrono::Local)
-            .format("%Y-%m-%d %H:%M")
-            .to_string()
     }
 
     pub fn sanitize_filename(&self, filename: &str) -> String {
@@ -601,28 +532,7 @@ impl NotionToObsidian {
                 Ok(full_content) => {
                     match self.save_to_file(&title, &full_content).await {
                         Ok(_) => {
-                            // 移行済みフラグを更新
-                            match self
-                                .client
-                                .pages
-                                .update_page_properties(
-                                    &page.id,
-                                    UpdatePagePropertiesRequest {
-                                        properties: {
-                                            let mut props = BTreeMap::new();
-                                            props.insert(
-                                                "移行済み".to_string(),
-                                                Some(notion_client::objects::page::PageProperty::Checkbox {
-                                                    checkbox: true,
-                                                    id: None,
-                                                }),
-                                            );
-                                            props
-                                        },
-                                        ..Default::default()
-                                    },
-                                )
-                                .await
+                            match self.post_processor.process(page, &self.client).await
                             {
                                 Ok(_) => {
                                     success_count += 1;

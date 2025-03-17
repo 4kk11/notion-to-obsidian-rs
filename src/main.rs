@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use anyhow::Context;
-use notion_to_obsidian_rs::NotionToObsidian;
+use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, converter, traits::{post_processor::MyPostProcessor, MyFrontmatterGenerator}, NotionToObsidian};
 use dotenv::dotenv;
 
 #[tokio::main]
@@ -25,13 +25,19 @@ async fn main() -> anyhow::Result<()> {
     let database_id = std::env::var("ALL_DATABASE_ID")
         .context("ALL_DATABASE_IDが設定されていません")?;
 
-    let mut converter = NotionToObsidian::new(
-        token,
-        PathBuf::from(obsidian_dir),
-    )?;
+    let converter = NotionToObsidianBuilder::new(token.clone())
+        .with_output_path(obsidian_dir)
+        .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, token).await))
+        .with_post_processor(Box::new(MyPostProcessor{}))
+        .build()?; 
+
+    // let mut converter = NotionToObsidian::new(
+    //     token,
+    //     PathBuf::from(obsidian_dir),
+    // )?;
 
     // タグデータの読み込み
-    converter.load_tags(&tag_database_id).await?;
+    // converter.load_tags(&tag_database_id).await?;
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {

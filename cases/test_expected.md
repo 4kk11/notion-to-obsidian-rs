@@ -1,8 +1,9 @@
 ---
 types:
+  - "[[Rust]]"
+  - "[[Memo]]"
 created: 2025-03-06 17:40
 ---
-
 - toggle1
   - 1
     aaaa
@@ -18,7 +19,6 @@ aaaa
 aaaa
 ```
 
-
 > aaaaaaaaaaaaaaa
 > iiiiiiiiiiiiiiiiiiiiiiiiiiiii
 > uuuuuuuuuuuuu
@@ -31,11 +31,8 @@ aaaa
 
 
 # 見出し１
-
 ## 見出し2
-
 ### 見出し3
-
 
 - 箇条書き1
 - 箇条書き2

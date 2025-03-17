@@ -14,6 +14,8 @@ pub enum NotionToObsidianError {
     FileWriteError(String),
     #[error("環境変数が設定されていません: {0}")]
     EnvVarError(String),
+    #[error("タイトルが設定されていません")]
+    NoTitleError,
 }
 
 pub type Result<T> = std::result::Result<T, NotionToObsidianError>;
