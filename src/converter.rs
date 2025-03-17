@@ -1,9 +1,7 @@
 use futures::future::BoxFuture;
 use log::info;
 use notion_client::{
-    endpoints::{
-        Client,
-    },
+    endpoints::Client,
     objects::{
         block::{Block, BlockType},
         file::File,

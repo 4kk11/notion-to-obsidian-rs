@@ -23,7 +23,7 @@ pub trait FrontmatterGenerator: Send + Sync {
 pub struct DefaultFrontmatterGenerator;
 
 impl FrontmatterGenerator for DefaultFrontmatterGenerator {
-    fn generate(&self, page: &Page, client: &Client) -> Result<String, NotionToObsidianError> {
+    fn generate(&self, page: &Page, _client: &Client) -> Result<String, NotionToObsidianError> {
         // if let Some(PageProperty::Title { id, title }) = page.properties.get("名前") {
         //     if !title.is_empty() {
         //         Ok(format!("---\ntitle: {}\n---\n", title))
@@ -102,7 +102,7 @@ impl MyFrontmatterGenerator {
 }
 
 impl FrontmatterGenerator for MyFrontmatterGenerator {
-    fn generate(&self, page: &Page, client: &Client) -> Result<String, NotionToObsidianError> {
+    fn generate(&self, page: &Page, _client: &Client) -> Result<String, NotionToObsidianError> {
 
 
         let mut frontmatter = String::from("---\n");

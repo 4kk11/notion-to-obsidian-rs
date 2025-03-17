@@ -13,7 +13,7 @@ pub struct DefaultPostProcessor;
 
 #[async_trait]
 impl PostProcessor for DefaultPostProcessor {
-    async fn process(&self, page: &Page, client: &Client) -> Result<(), NotionToObsidianError> {
+    async fn process(&self, _page: &Page, _client: &Client) -> Result<(), NotionToObsidianError> {
         Ok(())
     }
 }

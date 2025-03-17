@@ -1,6 +1,5 @@
-use std::path::PathBuf;
 use anyhow::Context;
-use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, converter, traits::{post_processor::MyPostProcessor, DatabasePageProvider, MyFrontmatterGenerator, SinglePageProvider}, NotionToObsidian};
+use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, traits::{post_processor::MyPostProcessor, DatabasePageProvider, MyFrontmatterGenerator, SinglePageProvider}};
 use dotenv::dotenv;
 
 #[tokio::main]
