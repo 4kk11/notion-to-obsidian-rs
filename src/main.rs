@@ -1,12 +1,23 @@
 use anyhow::Context;
-use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, traits::{post_processor::MyPostProcessor, DatabasePageProvider, MyFrontmatterGenerator, SinglePageProvider}};
 use dotenv::dotenv;
+use notion_to_obsidian_rs::{
+    builder::NotionToObsidianBuilder,
+    traits::{
+        post_processor::MyPostProcessor, DatabasePageProvider, MyFrontmatterGenerator,
+        SinglePageProvider,
+    },
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
-    let required_vars = ["NOTION_TOKEN", "OBSIDIAN_DIR", "ALL_DATABASE_ID", "TAG_DATABASE_ID"];
+    let required_vars = [
+        "NOTION_TOKEN",
+        "OBSIDIAN_DIR",
+        "ALL_DATABASE_ID",
+        "TAG_DATABASE_ID",
+    ];
     for var in required_vars {
         if std::env::var(var).is_err() {
             eprintln!("Error: {} is not set in environment variables", var);
@@ -15,15 +26,12 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let token = std::env::var("NOTION_TOKEN")
-        .context("NOTION_TOKENが設定されていません")?;
-    let obsidian_dir = std::env::var("OBSIDIAN_DIR")
-        .context("OBSIDIAN_DIRが設定されていません")?;
-    let tag_database_id = std::env::var("TAG_DATABASE_ID")
-        .context("TAG_DATABASE_IDが設定されていません")?;
-    let database_id = std::env::var("ALL_DATABASE_ID")
-        .context("ALL_DATABASE_IDが設定されていません")?;
-
+    let token = std::env::var("NOTION_TOKEN").context("NOTION_TOKENが設定されていません")?;
+    let obsidian_dir = std::env::var("OBSIDIAN_DIR").context("OBSIDIAN_DIRが設定されていません")?;
+    let tag_database_id =
+        std::env::var("TAG_DATABASE_ID").context("TAG_DATABASE_IDが設定されていません")?;
+    let database_id =
+        std::env::var("ALL_DATABASE_ID").context("ALL_DATABASE_IDが設定されていません")?;
 
     // let mut converter = NotionToObsidian::new(
     //     token,
@@ -52,9 +60,11 @@ async fn main() -> anyhow::Result<()> {
             let converter = NotionToObsidianBuilder::new(token.clone())
                 .with_output_path(obsidian_dir)
                 .with_page_provider(Box::new(SinglePageProvider::new(page_id.to_string())))
-                .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, token).await))
-                .with_post_processor(Box::new(MyPostProcessor{}))
-                .build()?; 
+                .with_frontmatter_generator(Box::new(
+                    MyFrontmatterGenerator::new(&tag_database_id, token).await,
+                ))
+                .with_post_processor(Box::new(MyPostProcessor {}))
+                .build()?;
 
             converter.migrate_pages().await?;
             println!("変換完了: ページを変換しました");
@@ -69,12 +79,17 @@ async fn main() -> anyhow::Result<()> {
             let converter = NotionToObsidianBuilder::new(token.clone())
                 .with_output_path(obsidian_dir)
                 .with_page_provider(Box::new(DatabasePageProvider::new(database_id, limit)))
-                .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, token).await))
-                .with_post_processor(Box::new(MyPostProcessor{}))
+                .with_frontmatter_generator(Box::new(
+                    MyFrontmatterGenerator::new(&tag_database_id, token).await,
+                ))
+                .with_post_processor(Box::new(MyPostProcessor {}))
                 .build()?;
 
             let (success_count, total_count) = converter.migrate_pages().await?;
-            println!("変換完了: {} / {} ページを変換しました", success_count, total_count);
+            println!(
+                "変換完了: {} / {} ページを変換しました",
+                success_count, total_count
+            );
         }
         _ => {
             eprintln!("不正な引数です");

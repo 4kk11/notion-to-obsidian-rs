@@ -2,23 +2,18 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use notion_client::{
-    endpoints::{databases::query::request::{
-        QueryDatabaseRequest, 
-        Sort,
-        SortDirection
-    }, Client}, 
-    objects::page::{
-        Page, 
-        PageProperty
-    }};
+    endpoints::{
+        databases::query::request::{QueryDatabaseRequest, Sort, SortDirection},
+        Client,
+    },
+    objects::page::{Page, PageProperty},
+};
 
 use crate::NotionToObsidianError;
-
 
 pub trait FrontmatterGenerator: Send + Sync {
     fn generate(&self, page: &Page, client: &Client) -> Result<String, NotionToObsidianError>;
 }
-
 
 pub struct DefaultFrontmatterGenerator;
 
@@ -43,9 +38,7 @@ impl FrontmatterGenerator for DefaultFrontmatterGenerator {
 
         Ok(frontmatter)
     }
-
 }
-
 
 pub struct MyFrontmatterGenerator {
     tag_mapping: HashMap<String, String>,
@@ -58,7 +51,10 @@ impl MyFrontmatterGenerator {
         MyFrontmatterGenerator { tag_mapping }
     }
 
-    pub async fn load_tags(tag_database_id: &str, client: &Client) -> Result<HashMap<String, String>, NotionToObsidianError> {
+    pub async fn load_tags(
+        tag_database_id: &str,
+        client: &Client,
+    ) -> Result<HashMap<String, String>, NotionToObsidianError> {
         let mut tag_mapping = HashMap::new();
 
         let mut request = QueryDatabaseRequest::default();
@@ -103,8 +99,6 @@ impl MyFrontmatterGenerator {
 
 impl FrontmatterGenerator for MyFrontmatterGenerator {
     fn generate(&self, page: &Page, _client: &Client) -> Result<String, NotionToObsidianError> {
-
-
         let mut frontmatter = String::from("---\n");
 
         // タイプ（タグ）の処理

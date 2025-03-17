@@ -1,15 +1,15 @@
+use crate::error::Result;
+use async_trait::async_trait;
 use notion_client::{
     endpoints::{
-        Client,
         databases::query::request::{
             CheckBoxCondition, Filter, FilterType, PropertyCondition, QueryDatabaseRequest, Sort,
             SortDirection,
         },
+        Client,
     },
     objects::page::Page,
 };
-use async_trait::async_trait;
-use crate::error::Result;
 
 #[async_trait]
 pub trait PageProvider: Send + Sync {

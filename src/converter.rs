@@ -9,12 +9,12 @@ use notion_client::{
     },
 };
 use regex::Regex;
-use std::{
-    fs,
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 
-use crate::{error::{NotionToObsidianError, Result}, traits::{post_processor::PostProcessor, FrontmatterGenerator, page_provider::PageProvider}};
+use crate::{
+    error::{NotionToObsidianError, Result},
+    traits::{page_provider::PageProvider, post_processor::PostProcessor, FrontmatterGenerator},
+};
 
 #[derive(Debug)]
 struct BlockWithChildren {
@@ -32,8 +32,8 @@ pub struct NotionToObsidian {
 
 impl NotionToObsidian {
     pub fn new(
-        token: String, 
-        obsidian_dir: PathBuf, 
+        token: String,
+        obsidian_dir: PathBuf,
         frontmatter_generator: Box<dyn FrontmatterGenerator>,
         post_processor: Box<dyn PostProcessor>,
         page_provider: Box<dyn PageProvider>,
@@ -99,7 +99,7 @@ impl NotionToObsidian {
             .map_err(|e| NotionToObsidianError::PageRetrievalError(e.to_string()))?;
 
         let frontmatter = self.generate_frontmatter(&page, &self.client);
-        
+
         let blocks = self.get_block_children_recursively(page_id).await?;
         let content = self.convert_blocks_to_markdown(&blocks)?;
 
@@ -107,10 +107,12 @@ impl NotionToObsidian {
     }
 
     fn generate_frontmatter(&self, page: &Page, client: &Client) -> String {
-        self.frontmatter_generator.generate(page, client).unwrap_or_else(|e| {
-            info!("Frontmatterの生成に失敗: {}", e);
-            String::new()
-        })
+        self.frontmatter_generator
+            .generate(page, client)
+            .unwrap_or_else(|e| {
+                info!("Frontmatterの生成に失敗: {}", e);
+                String::new()
+            })
     }
 
     fn convert_blocks_to_markdown(&self, blocks: &[BlockWithChildren]) -> Result<String> {
@@ -121,7 +123,8 @@ impl NotionToObsidian {
         for block in blocks {
             if let Some(prev_type) = &prev_block_type {
                 if !matches!(prev_type, &BlockType::NumberedListItem { .. })
-                   && matches!(&block.block.block_type, BlockType::NumberedListItem { .. }) {
+                    && matches!(&block.block.block_type, BlockType::NumberedListItem { .. })
+                {
                     list_context = ListContext::new();
                 }
             }
@@ -295,7 +298,7 @@ impl NotionToObsidian {
             BlockType::Divider { .. } => Ok("---\n\n".to_string()),
             BlockType::Table { table: _ } => {
                 let mut content = String::new();
-                
+
                 if !children.is_empty() {
                     if let Some(first_row) = children.first() {
                         if let BlockType::TableRow { table_row } = &first_row.block.block_type {
@@ -355,9 +358,7 @@ impl NotionToObsidian {
         for text in rich_text {
             let mut content = match text {
                 notion_client::objects::rich_text::RichText::Text {
-                    text,
-                    plain_text,
-                    ..
+                    text, plain_text, ..
                 } => {
                     let text_content = plain_text
                         .as_ref()
@@ -379,9 +380,15 @@ impl NotionToObsidian {
             };
 
             if let Some(annotations) = match text {
-                notion_client::objects::rich_text::RichText::Text { annotations, .. } => annotations.clone(),
-                notion_client::objects::rich_text::RichText::Mention { annotations, .. } => Some(annotations.clone()),
-                notion_client::objects::rich_text::RichText::Equation { annotations, .. } => Some(annotations.clone()),
+                notion_client::objects::rich_text::RichText::Text { annotations, .. } => {
+                    annotations.clone()
+                }
+                notion_client::objects::rich_text::RichText::Mention { annotations, .. } => {
+                    Some(annotations.clone())
+                }
+                notion_client::objects::rich_text::RichText::Equation { annotations, .. } => {
+                    Some(annotations.clone())
+                }
                 notion_client::objects::rich_text::RichText::None => None,
             } {
                 if annotations.bold {
@@ -457,25 +464,20 @@ impl NotionToObsidian {
             println!("ページ {} の変換を開始...", title);
 
             match self.convert_page(&page.id).await {
-                Ok(full_content) => {
-                    match self.save_to_file(&title, &full_content).await {
+                Ok(full_content) => match self.save_to_file(&title, &full_content).await {
+                    Ok(_) => match self.post_processor.process(page, &self.client).await {
                         Ok(_) => {
-                            match self.post_processor.process(page, &self.client).await
-                            {
-                                Ok(_) => {
-                                    success_count += 1;
-                                    println!("ページを正常に変換しました: {}", title);
-                                }
-                                Err(e) => {
-                                    eprintln!("移行済みフラグの更新に失敗: {}", e);
-                                }
-                            }
+                            success_count += 1;
+                            println!("ページを正常に変換しました: {}", title);
                         }
                         Err(e) => {
-                            eprintln!("ファイルの保存に失敗: {}", e);
+                            eprintln!("移行済みフラグの更新に失敗: {}", e);
                         }
+                    },
+                    Err(e) => {
+                        eprintln!("ファイルの保存に失敗: {}", e);
                     }
-                }
+                },
                 Err(e) => {
                     eprintln!("ページの変換に失敗: {}", e);
                 }
@@ -493,9 +495,7 @@ struct ListContext {
 
 impl ListContext {
     fn new() -> Self {
-        Self {
-            counters: vec![0],
-        }
+        Self { counters: vec![0] }
     }
 
     fn next_number(&mut self) -> usize {
