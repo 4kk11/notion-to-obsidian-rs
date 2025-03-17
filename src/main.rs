@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use anyhow::Context;
-use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, converter, traits::{post_processor::MyPostProcessor, MyFrontmatterGenerator}, NotionToObsidian};
+use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, converter, traits::{post_processor::MyPostProcessor, DatabasePageProvider, MyFrontmatterGenerator, SinglePageProvider}, NotionToObsidian};
 use dotenv::dotenv;
 
 #[tokio::main]
@@ -25,11 +25,6 @@ async fn main() -> anyhow::Result<()> {
     let database_id = std::env::var("ALL_DATABASE_ID")
         .context("ALL_DATABASE_IDが設定されていません")?;
 
-    let converter = NotionToObsidianBuilder::new(token.clone())
-        .with_output_path(obsidian_dir)
-        .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, token).await))
-        .with_post_processor(Box::new(MyPostProcessor{}))
-        .build()?; 
 
     // let mut converter = NotionToObsidian::new(
     //     token,
@@ -54,7 +49,15 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
             let page_id = &args[2];
-            converter.migrate_page(page_id).await?;
+
+            let converter = NotionToObsidianBuilder::new(token.clone())
+                .with_output_path(obsidian_dir)
+                .with_page_provider(Box::new(SinglePageProvider::new(page_id.to_string())))
+                .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, token).await))
+                .with_post_processor(Box::new(MyPostProcessor{}))
+                .build()?; 
+
+            converter.migrate_pages().await?;
             println!("変換完了: ページを変換しました");
         }
         "--limit" => {
@@ -63,7 +66,15 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
             let limit = args[2].parse::<usize>().unwrap_or(5);
-            let (success_count, total_count) = converter.migrate_pages(&database_id, limit).await?;
+
+            let converter = NotionToObsidianBuilder::new(token.clone())
+                .with_output_path(obsidian_dir)
+                .with_page_provider(Box::new(DatabasePageProvider::new(database_id, limit)))
+                .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, token).await))
+                .with_post_processor(Box::new(MyPostProcessor{}))
+                .build()?;
+
+            let (success_count, total_count) = converter.migrate_pages().await?;
             println!("変換完了: {} / {} ページを変換しました", success_count, total_count);
         }
         _ => {

@@ -1,13 +1,13 @@
 use std::path::PathBuf;
-use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, traits::{post_processor::MyPostProcessor, MyFrontmatterGenerator}, NotionToObsidian, NotionToObsidianError, Result};
+use notion_to_obsidian_rs::{builder::NotionToObsidianBuilder, traits::{post_processor::MyPostProcessor, MyFrontmatterGenerator, SinglePageProvider}, Result};
 use std::fs;
 use std::time::Instant;
 use tokio;
-use log::{info, error};
+use log::info;
 use env_logger;
 
 const TEST_PAGE_ID: &str = "1aeb266e0c708060a6fec6eb458e1379";
-const TEST_OUTPUT_PAGE_TITLE: &str = "test_output";
+const TEST_OUTPUT_PAGE_TITLE: &str = "test";
 const TEST_OUTPUT_DIR: &str = "target/test_output";
 
 #[tokio::test]
@@ -37,6 +37,7 @@ async fn test_page_conversion() -> Result<()> {
 
     let converter = NotionToObsidianBuilder::new(notion_token.clone())
         .with_output_path(TEST_OUTPUT_DIR.to_string())
+        .with_page_provider(Box::new(SinglePageProvider::new(TEST_PAGE_ID.to_string())))
         .with_frontmatter_generator(Box::new(MyFrontmatterGenerator::new(&tag_database_id, notion_token.clone()).await))
         .with_post_processor(Box::new(MyPostProcessor{}))
         .build()
@@ -44,32 +45,12 @@ async fn test_page_conversion() -> Result<()> {
 
 
     // NotionToObsidianインスタンスを作成
-    // let converter = NotionToObsidian::new(notion_token, obsidian_dir)?;
     info!("セットアップ完了: {:?}", start_setup.elapsed());
 
     // テスト対象のページを変換
     let start_conversion = Instant::now();
-    let converted_content = match converter.convert_page(TEST_PAGE_ID).await {
-        Ok(full_content) => {
-            info!("ページ変換完了: {:?}", start_conversion.elapsed());
-            
-            let start_save = Instant::now();
-            match converter.save_to_file(TEST_OUTPUT_PAGE_TITLE, &full_content).await {
-                Ok(_) => {
-                    info!("ファイル保存完了: {:?}", start_save.elapsed());
-                    full_content
-                }
-                Err(e) => {
-                    error!("Failed to save converted page: {}", e);
-                    return Err(NotionToObsidianError::FileWriteError(e.to_string()));
-                }
-            }
-        }
-        Err(e) => {
-            error!("Failed to convert page: {}", e);
-            return Err(NotionToObsidianError::ConversionError(e.to_string()));
-        }
-    };
+    converter.migrate_pages().await?;
+    info!("ページ変換完了: {:?}", start_conversion.elapsed());
 
     // テストケースのファイルを読み込み
     let expected_content = fs::read_to_string("cases/test_expected.md")

@@ -2,10 +2,6 @@ use futures::future::BoxFuture;
 use log::info;
 use notion_client::{
     endpoints::{
-        databases::query::request::{
-            CheckBoxCondition, Filter, FilterType, PropertyCondition, QueryDatabaseRequest, Sort,
-            SortDirection,
-        },
         Client,
     },
     objects::{
@@ -20,7 +16,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{error::{NotionToObsidianError, Result}, traits::{post_processor::PostProcessor, FrontmatterGenerator}};
+use crate::{error::{NotionToObsidianError, Result}, traits::{post_processor::PostProcessor, FrontmatterGenerator, page_provider::PageProvider}};
 
 #[derive(Debug)]
 struct BlockWithChildren {
@@ -33,6 +29,7 @@ pub struct NotionToObsidian {
     obsidian_dir: PathBuf,
     frontmatter_generator: Box<dyn FrontmatterGenerator>,
     post_processor: Box<dyn PostProcessor>,
+    page_provider: Box<dyn PageProvider>,
 }
 
 impl NotionToObsidian {
@@ -41,7 +38,7 @@ impl NotionToObsidian {
         obsidian_dir: PathBuf, 
         frontmatter_generator: Box<dyn FrontmatterGenerator>,
         post_processor: Box<dyn PostProcessor>,
-
+        page_provider: Box<dyn PageProvider>,
     ) -> Result<Self> {
         let client = Client::new(token, None)
             .map_err(|e| NotionToObsidianError::ConversionError(e.to_string()))?;
@@ -51,6 +48,7 @@ impl NotionToObsidian {
             obsidian_dir,
             frontmatter_generator,
             post_processor,
+            page_provider,
         })
     }
 
@@ -104,7 +102,6 @@ impl NotionToObsidian {
 
         let frontmatter = self.generate_frontmatter(&page, &self.client);
         
-        // ページの全ブロックを一括で取得
         let blocks = self.get_block_children_recursively(page_id).await?;
         let content = self.convert_blocks_to_markdown(&blocks)?;
 
@@ -302,7 +299,6 @@ impl NotionToObsidian {
                 let mut content = String::new();
                 
                 if !children.is_empty() {
-                    // ヘッダー行の処理
                     if let Some(first_row) = children.first() {
                         if let BlockType::TableRow { table_row } = &first_row.block.block_type {
                             content.push('|');
@@ -312,14 +308,12 @@ impl NotionToObsidian {
                             }
                             content.push('\n');
 
-                            // 区切り行の追加
                             content.push('|');
                             for _ in 0..table_row.cells.len() {
                                 content.push_str(" --- |");
                             }
                             content.push('\n');
 
-                            // データ行の処理
                             for row in children.iter().skip(1) {
                                 if let BlockType::TableRow { table_row } = &row.block.block_type {
                                     content.push('|');
@@ -386,7 +380,6 @@ impl NotionToObsidian {
                 notion_client::objects::rich_text::RichText::None => String::new(),
             };
 
-            // アノテーションの抽出と適用
             if let Some(annotations) = match text {
                 notion_client::objects::rich_text::RichText::Text { annotations, .. } => annotations.clone(),
                 notion_client::objects::rich_text::RichText::Mention { annotations, .. } => Some(annotations.clone()),
@@ -451,77 +444,14 @@ impl NotionToObsidian {
         Ok(())
     }
 
-    pub async fn migrate_page(&self, page_id: &str) -> Result<()> {
-        let title = self
-            .client
-            .pages
-            .retrieve_a_page(page_id, None)
-            .await
-            .map_err(|e| NotionToObsidianError::PageRetrievalError(e.to_string()))?
-            .properties
-            .get("名前")
-            .and_then(|prop| {
-                if let PageProperty::Title { title, .. } = prop {
-                    title.iter().filter_map(|rt| rt.plain_text()).next()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| "Untitled".to_string());
+    pub async fn migrate_pages(&self) -> Result<(usize, usize)> {
+        println!("ページの変換を開始します...");
 
-        println!("ページ {} の変換を開始...", title);
-
-        match self.convert_page(page_id).await {
-            Ok(converted) => {
-                match self.save_to_file(&title, &converted).await {
-                    Ok(_) => {
-                        println!("ページを正常に変換しました: {}", title);
-                    }
-                    Err(e) => {
-                        eprintln!("ファイルの保存に失敗: {}", e);
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("ページの変換に失敗: {}", e);
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn migrate_pages(&self, database_id: &str, limit: usize) -> Result<(usize, usize)> {
-        println!("最大 {} ページの変換を開始します...", limit);
-
-        let request = QueryDatabaseRequest {
-            filter: Some(Filter::Value {
-                filter_type: FilterType::Property {
-                    property: "移行済み".to_string(),
-                    condition: PropertyCondition::Checkbox(CheckBoxCondition::Equals(false)),
-                },
-            }),
-            sorts: Some(vec![Sort::Property {
-                property: "作成日時".to_string(),
-                direction: SortDirection::Descending,
-            }]),
-            page_size: Some(limit.try_into().unwrap()),
-            ..Default::default()
-        };
-
-        let response = self
-            .client
-            .databases
-            .query_a_database(database_id, request)
-            .await
-            .map_err(|e| NotionToObsidianError::ConversionError(e.to_string()))?;
-
-        println!(
-            "{} ページを取得しました。変換を開始します...",
-            response.results.len()
-        );
+        let pages = self.page_provider.get_pages(&self.client).await?;
+        println!("{} ページを取得しました。変換を開始します...", pages.len());
 
         let mut success_count = 0;
-        for page in &response.results {
+        for page in &pages {
             let title = self
                 .extract_page_title(page)
                 .unwrap_or_else(|| "Untitled".to_string());
@@ -554,7 +484,7 @@ impl NotionToObsidian {
             }
         }
 
-        Ok((success_count, response.results.len()))
+        Ok((success_count, pages.len()))
     }
 }
 
