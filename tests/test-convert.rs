@@ -58,7 +58,7 @@ async fn test_page_conversion() -> Result<()> {
 
     // テストケースのファイルを読み込み
     let expected_content =
-        fs::read_to_string("cases/test_expected.md").expect("Failed to read test.md");
+        fs::read_to_string("tests/cases/test_expected.md").expect("Failed to read test.md");
 
     // 生成したファイルを読み込み
     let converted_content =

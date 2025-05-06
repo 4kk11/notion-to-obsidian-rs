@@ -23,6 +23,8 @@ aaaa
 > iiiiiiiiiiiiiiiiiiiiiiiiiiiii
 > uuuuuuuuuuuuu
 > wwwwwwwwwww
+> - a
+> - i
 
 
 
@@ -71,13 +73,13 @@ aaaa
   asdasd
 
 > [!note] コールアウト
->内容
->あ
->
->い
->う
->え
->お
+> 内容
+> あ
+> 
+> い
+> う
+> え
+> お
 
 
 
